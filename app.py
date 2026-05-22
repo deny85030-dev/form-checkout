@@ -24,7 +24,7 @@ products = {
     'price': 10000,
     'description': 'Paket Marketing Komplit\n\n✅ YouTube Masterclass\n✅ TikTok Shop Masterclass\n✅ Shopee Top Creator\n✅ Organic Traffic Mastery\n✅ Meta Ads Simple System\n✅ AI Chatbot Selling\n\nBelajar step-by-step dengan materi simpel dan mudah dipraktikkan.\n\n🎯 Cocok untuk Pemula\n📱 Bisa Dipelajari dari HP\n⚡ Fokus Praktek & Hasil\n\n📌 7 Hari - 7 Kelas - 7 Strategi\n📌 Sistem jalan, cuan datang!',
     'payment_instructions': '🏦 Bank Jago\nNo. Rekening: 106371536422\na.n. Deny Prasetyo',
-    'product_image': ''
+    'product_image': 'https://i.imgur.com/bOaZtCP.png'
 }
 
 QRIS_IMAGE_URL = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjdEuaeTQp9-oYTbkTybyGb4hV23Gbdi12E9p9x3SJNlzJCfweazzWg2Tr6iSXHFXlSxi845dqwVbRZQ8CPnI63_mtQ9wNltEb_gDtJtP5GiI_YeIZLWnBVw_AZ1Glo_0RfuHBupJFra28Gf1M3idWT6l9G_edl1DNSjZ5P9DLhT5CFzwCIkG7pWGHLYSk/w398-h400/photo_2026-05-14_06-29-01.jpg"
