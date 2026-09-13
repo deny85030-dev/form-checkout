@@ -16,23 +16,28 @@ STORE_NAME = 'Formula YouTube Monet'
 WHATSAPP_ADMIN = '6285138718594'
 EMAIL_SENDER = 'morahshop@gmail.com'
 EMAIL_PASSWORD = 'ewsv nupx pvem olmq'
-FONNTE_API_KEY = ''  # ⏸️ WA dimatikan sementara. Nanti isi kalau sudah ada saldo Fonnte.
+FONNTE_API_KEY = ''  # ⏸️ WA dimatikan sementara
 ADMIN_PASSWORD = 'admin123'
 
 PRODUCT_NAME = 'Kelas Formula YouTube Monet'
-HARGA_PROMO = 99000
-HARGA_NORMAL = 330000
+HARGA_CORET = 599000  # Harga coret (selalu tampil)
 
 # ============================================================
-# 🎯 ATUR WAKTU PROMO DI SINI
-# Format: 'YYYY-MM-DD HH:MM:SS' (UTC / GMT+0)
-# Waktu WIB = UTC + 7
-# Contoh: Mau promo mulai 14 Mei 2026 jam 08:00 WIB
-#         → tulis '2026-05-14 01:00:00'
+# 🎯 SISTEM GELOMBANG HARGA
+# Setiap kelipatan "KUOTA_PER_FASE" user, harga naik 1 tingkat
 # ============================================================
-WAKTU_MULAI_PROMO = '2026-05-14 01:00:00'
-DURASI_PROMO_MENIT = 10
+KUOTA_PER_FASE = 100  # Setiap 100 member, harga naik
 
+FASE_HARGA = [
+    {'nama': 'Fase 1 - Early Bird', 'harga': 99000},   # 0-99 member
+    {'nama': 'Fase 2',              'harga': 149000},  # 100-199 member
+    {'nama': 'Fase 3',              'harga': 199000},  # 200-299 member
+    {'nama': 'Fase 4',              'harga': 249000},  # 300-399 member
+    {'nama': 'Fase 5',              'harga': 299000},  # 400-499 member
+    {'nama': 'Harga Normal',        'harga': 599000},  # 500+ member
+]
+
+# PEMBAYARAN
 BANK_NAME = 'Bank Jago'
 BANK_ACCOUNT = '106371536422'
 BANK_HOLDER = 'Deny Prasetyo'
@@ -54,49 +59,55 @@ def save_json(path, data):
     except Exception as e:
         print(f"Save error: {e}")
 
-# ========================== PROMO ====================
-def get_promo_status():
-    now = datetime.now()
-    waktu_mulai = datetime.strptime(WAKTU_MULAI_PROMO, '%Y-%m-%d %H:%M:%S')
-    selisih_total = (now - waktu_mulai).total_seconds()
-    durasi_promo_detik = DURASI_PROMO_MENIT * 60
-    if selisih_total < 0:
-        return False, 0, 'belum_mulai'
-    elif selisih_total < durasi_promo_detik:
-        sisa_detik = int(durasi_promo_detik - selisih_total)
-        return True, sisa_detik, 'aktif'
-    else:
-        return False, 0, 'berakhir'
-
+# ========================== GELOMBANG HARGA ====================
 def get_harga_sekarang():
-    is_aktif, _, _ = get_promo_status()
-    if is_aktif:
-        return HARGA_PROMO, f"{HARGA_PROMO:,}".replace(',', '.'), True
-    else:
-        return HARGA_NORMAL, f"{HARGA_NORMAL:,}".replace(',', '.'), False
-
-# ========================== WHATSAPP (DIMATIKAN SEMENTARA) ====================
-def send_whatsapp(phone, message):
     """
-    ⏸️ Fungsi WA dimatikan sementara karena belum ada saldo Fonnte.
-    Kalau nanti sudah ada saldo:
-    1. Isi FONNTE_API_KEY di atas
-    2. Ganti isi fungsi ini dengan kode di bawah (hilangkan tanda #):
+    Hitung harga berdasarkan jumlah user terdaftar.
+    Setiap KUOTA_PER_FASE user, harga naik 1 tingkat.
+    """
+    users = load_json(USERS_FILE)
+    total_user = len(users)
     
-    try:
-        phone = ''.join(filter(str.isdigit, phone))
-        if phone.startswith('0'): phone = '62' + phone[1:]
-        if not phone.startswith('62'): phone = '62' + phone
-        url = "https://api.fonnte.com/send"
-        headers = {"Authorization": FONNTE_API_KEY}
-        data = {"target": phone, "message": message, "countryCode": "62"}
-        r = requests.post(url, headers=headers, data=data, timeout=15)
-        print(f"WA Response: {r.text}")
-        return r.json().get('status', False)
-    except Exception as e:
-        print(f"WA Error: {e}")
-        return False
-    """
+    # Hitung fase: 0 = Fase 1, 1 = Fase 2, dst
+    fase_index = total_user // KUOTA_PER_FASE
+    
+    # Kalau fase_index lebih dari jumlah fase, pakai fase terakhir
+    if fase_index >= len(FASE_HARGA):
+        fase_index = len(FASE_HARGA) - 1
+    
+    fase = FASE_HARGA[fase_index]
+    harga = fase['harga']
+    harga_display = f"{harga:,}".replace(',', '.')
+    harga_coret_display = f"{HARGA_CORET:,}".replace(',', '.')
+    
+    # Hitung sisa slot sampai harga naik berikutnya
+    slot_terpakai_di_fase_ini = total_user % KUOTA_PER_FASE
+    sisa_slot = KUOTA_PER_FASE - slot_terpakai_di_fase_ini
+    
+    # Kalau sudah fase terakhir (Harga Normal), tidak ada sisa slot
+    is_last_fase = (fase_index == len(FASE_HARGA) - 1)
+    if is_last_fase:
+        sisa_slot = 0
+    
+    is_discount = harga < HARGA_CORET  # True kalau masih ada diskon
+    
+    return {
+        'harga': harga,
+        'harga_display': harga_display,
+        'harga_coret': HARGA_CORET,
+        'harga_coret_display': harga_coret_display,
+        'fase_nama': fase['nama'],
+        'fase_index': fase_index,
+        'fase_number': fase_index + 1,
+        'total_user': total_user,
+        'sisa_slot': sisa_slot,
+        'is_discount': is_discount,
+        'is_last_fase': is_last_fase,
+        'kuota_per_fase': KUOTA_PER_FASE
+    }
+
+# ========================== WHATSAPP (DIMATIKAN) ====================
+def send_whatsapp(phone, message):
     print(f"[WA SKIP] Belum ada saldo Fonnte. Target: {phone}")
     return False
 
@@ -132,8 +143,20 @@ def generate_invoice():
     return f"INV-{date_part}-{random_part}"
 
 # ========================== EMAIL: INVOICE CUSTOMER ====================
-def build_invoice_email(nama, email, whatsapp, invoice, price_display, is_promo):
-    promo_badge = '<span style="background:#16a34a;color:white;padding:4px 10px;border-radius:8px;font-size:11px;">🔥 PROMO</span>' if is_promo else '<span style="background:#dc2626;color:white;padding:4px 10px;border-radius:8px;font-size:11px;">HARGA NORMAL</span>'
+def build_invoice_email(nama, email, whatsapp, invoice, harga_data):
+    harga_display = harga_data['harga_display']
+    harga_coret_display = harga_data['harga_coret_display']
+    fase_nama = harga_data['fase_nama']
+    is_discount = harga_data['is_discount']
+    
+    diskon_row = ''
+    if is_discount:
+        diskon_row = f'<tr><td style="padding:6px 0;color:#555;">🏷️ Fase</td><td style="text-align:right;font-weight:bold;color:#16a34a;">{fase_nama}</td></tr>'
+    
+    harga_coret_html = ''
+    if is_discount:
+        harga_coret_html = f'<div style="text-align:right;font-size:14px;color:#999;text-decoration:line-through;">Rp {harga_coret_display}</div>'
+    
     return f"""
     <!DOCTYPE html>
     <html>
@@ -155,9 +178,17 @@ def build_invoice_email(nama, email, whatsapp, invoice, price_display, is_promo)
                     <tr><td style="padding:6px 0;color:#555;">👤 Nama</td><td style="text-align:right;">{nama}</td></tr>
                     <tr><td style="padding:6px 0;color:#555;">📧 Email</td><td style="text-align:right;">{email}</td></tr>
                     <tr><td style="padding:6px 0;color:#555;">📱 WhatsApp</td><td style="text-align:right;">{whatsapp}</td></tr>
-                    <tr><td style="padding:6px 0;color:#555;">📦 Produk</td><td style="text-align:right;">{PRODUCT_NAME} {promo_badge}</td></tr>
-                    <tr style="border-top:2px solid #16a34a;"><td style="padding:14px 0 0;font-weight:bold;">💰 TOTAL</td><td style="text-align:right;padding:14px 0 0;"><span style="font-size:24px;font-weight:900;color:#16a34a;">Rp {price_display}</span></td></tr>
+                    <tr><td style="padding:6px 0;color:#555;">📦 Produk</td><td style="text-align:right;">{PRODUCT_NAME}</td></tr>
+                    {diskon_row}
                 </table>
+                
+                <div style="border-top:2px solid #16a34a;margin-top:14px;padding-top:14px;">
+                    {harga_coret_html}
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-weight:bold;font-size:15px;">💰 TOTAL BAYAR</span>
+                        <span style="font-size:24px;font-weight:900;color:#16a34a;">Rp {harga_display}</span>
+                    </div>
+                </div>
             </div>
             
             <div style="text-align:center;margin:25px 0;">
@@ -189,7 +220,11 @@ def build_invoice_email(nama, email, whatsapp, invoice, price_display, is_promo)
     """
 
 # ========================== EMAIL: NOTIF ADMIN ====================
-def build_admin_notif_email(nama, email, whatsapp, invoice, price_display, is_promo):
+def build_admin_notif_email(nama, email, whatsapp, invoice, harga_data):
+    harga_display = harga_data['harga_display']
+    fase_nama = harga_data['fase_nama']
+    total_user = harga_data['total_user']
+    
     return f"""
     <!DOCTYPE html>
     <html>
@@ -206,8 +241,9 @@ def build_admin_notif_email(nama, email, whatsapp, invoice, price_display, is_pr
                 <tr><td style="padding:8px 0;color:#666;">📧 Email</td><td style="text-align:right;font-weight:bold;font-size:12px;">{email}</td></tr>
                 <tr><td style="padding:8px 0;color:#666;">📱 WhatsApp</td><td style="text-align:right;font-weight:bold;">{whatsapp}</td></tr>
                 <tr><td style="padding:8px 0;color:#666;">📋 Invoice</td><td style="text-align:right;font-family:monospace;font-weight:bold;">{invoice}</td></tr>
-                <tr><td style="padding:8px 0;color:#666;">💰 Total</td><td style="text-align:right;font-weight:bold;color:#16a34a;font-size:16px;">Rp {price_display}</td></tr>
-                <tr><td style="padding:8px 0;color:#666;">🏷️ Tipe</td><td style="text-align:right;font-weight:bold;">{'🔥 PROMO' if is_promo else '💰 HARGA NORMAL'}</td></tr>
+                <tr><td style="padding:8px 0;color:#666;">🏷️ Fase</td><td style="text-align:right;font-weight:bold;color:#16a34a;">{fase_nama}</td></tr>
+                <tr><td style="padding:8px 0;color:#666;">💰 Total</td><td style="text-align:right;font-weight:bold;color:#16a34a;font-size:16px;">Rp {harga_display}</td></tr>
+                <tr><td style="padding:8px 0;color:#666;">👥 Total Member</td><td style="text-align:right;font-weight:bold;">{total_user}</td></tr>
                 <tr><td style="padding:8px 0;color:#666;">🕐 Waktu</td><td style="text-align:right;">{datetime.now().strftime('%d/%m/%Y %H:%M')}</td></tr>
             </table>
             
@@ -226,20 +262,31 @@ def build_admin_notif_email(nama, email, whatsapp, invoice, price_display, is_pr
     </html>
     """
 
-# ========================== API PROMO STATUS ====================
+# ========================== API: HARGA & FASE ====================
+@app.route('/api/harga', methods=['GET', 'OPTIONS'])
+def api_harga():
+    if request.method == 'OPTIONS':
+        return '', 200
+    harga_data = get_harga_sekarang()
+    return jsonify(harga_data)
+
+# Alias biar kompatibel dengan kode lama
 @app.route('/api/promo-status', methods=['GET', 'OPTIONS'])
 def api_promo_status():
     if request.method == 'OPTIONS':
         return '', 200
-    is_aktif, sisa_detik, status = get_promo_status()
-    harga, harga_display, _ = get_harga_sekarang()
+    harga_data = get_harga_sekarang()
     return jsonify({
-        'aktif': is_aktif,
-        'sisa_detik': sisa_detik,
-        'status': status,
-        'harga': harga,
-        'harga_display': harga_display,
-        'waktu_mulai': WAKTU_MULAI_PROMO
+        'aktif': harga_data['is_discount'],
+        'sisa_detik': 0,
+        'status': 'harga_bertahap',
+        'harga': harga_data['harga'],
+        'harga_display': harga_data['harga_display'],
+        'harga_coret_display': harga_data['harga_coret_display'],
+        'fase_nama': harga_data['fase_nama'],
+        'total_user': harga_data['total_user'],
+        'sisa_slot': harga_data['sisa_slot'],
+        'is_discount': harga_data['is_discount']
     })
 
 # ========================== API REGISTER ====================
@@ -272,7 +319,8 @@ def api_register():
         if any(u['email'].lower() == email.lower() for u in users):
             return jsonify({'success': False, 'message': 'Email sudah terdaftar'}), 400
 
-        harga, harga_display, is_promo = get_harga_sekarang()
+        # Hitung harga DULU sebelum tambah user
+        harga_data = get_harga_sekarang()
         invoice = generate_invoice()
 
         new_user = {
@@ -282,25 +330,26 @@ def api_register():
             'password': password,
             'invoice': invoice,
             'product': PRODUCT_NAME,
-            'price': harga_display,
-            'is_promo': is_promo,
+            'harga': harga_data['harga'],
+            'harga_display': harga_data['harga_display'],
+            'fase_nama': harga_data['fase_nama'],
+            'fase_number': harga_data['fase_number'],
             'status': 'pending_payment',
             'registered_at': datetime.now().isoformat()
         }
         users.append(new_user)
         save_json(USERS_FILE, users)
 
-        # ==== KIRIM EMAIL INVOICE KE CUSTOMER ====
-        invoice_html = build_invoice_email(nama, email, whatsapp_clean, invoice, harga_display, is_promo)
+        # Kirim email invoice ke customer
+        invoice_html = build_invoice_email(nama, email, whatsapp_clean, invoice, harga_data)
         email_result = send_email(email, f"🧾 Invoice {invoice} - {STORE_NAME}", invoice_html)
         print(f"[EMAIL CUSTOMER] {email} → {email_result}")
 
-        # ==== KIRIM EMAIL NOTIF KE ADMIN ====
-        admin_email_html = build_admin_notif_email(nama, email, whatsapp_clean, invoice, harga_display, is_promo)
-        admin_email_result = send_email(EMAIL_SENDER, f"🔔 Pendaftaran Baru - {nama} - Rp {harga_display}", admin_email_html)
+        # Kirim email notif ke admin
+        admin_email_html = build_admin_notif_email(nama, email, whatsapp_clean, invoice, harga_data)
+        admin_email_result = send_email(EMAIL_SENDER, f"🔔 Pendaftaran Baru - {nama} - Rp {harga_data['harga_display']}", admin_email_html)
         print(f"[EMAIL ADMIN] {EMAIL_SENDER} → {admin_email_result}")
 
-        # WA dimatikan sementara
         send_whatsapp(whatsapp_clean, "[WA skip]")
 
         return jsonify({
@@ -311,8 +360,10 @@ def api_register():
             'email': email,
             'whatsapp': whatsapp_clean,
             'product': PRODUCT_NAME,
-            'price': harga_display,
-            'is_promo': is_promo,
+            'price': harga_data['harga_display'],
+            'harga_coret': harga_data['harga_coret_display'],
+            'fase_nama': harga_data['fase_nama'],
+            'is_promo': harga_data['is_discount'],
             'bank_name': BANK_NAME,
             'bank_account': BANK_ACCOUNT,
             'bank_holder': BANK_HOLDER,
@@ -364,52 +415,73 @@ def admin_logout():
 @login_required
 def admin():
     users = load_json(USERS_FILE)
-    is_aktif, sisa_detik, status = get_promo_status()
-    status_promo_text = 'AKTIF' if is_aktif else ('BELUM MULAI' if status == 'belum_mulai' else 'BERAKHIR')
-    status_promo_color = '#16a34a' if is_aktif else '#dc2626'
+    harga_data = get_harga_sekarang()
+    
     rows = ''
     for u in users:
         status_color = '#f59e0b' if u.get('status') == 'pending_payment' else '#16a34a'
-        promo_tag = ' 🔥' if u.get('is_promo') else ''
-        rows += f"<tr><td style='font-family:monospace;font-size:12px;'>{u.get('invoice','-')}</td><td>{u['nama']}</td><td style='font-size:12px;'>{u['email']}</td><td>{u.get('whatsapp','-')}</td><td><b>Rp {u.get('price','-')}</b>{promo_tag}</td><td><span style='background:{status_color};color:white;padding:4px 10px;border-radius:10px;font-size:11px;'>{u.get('status','-')}</span></td><td>{u.get('registered_at','-')[:10]}</td></tr>"
+        rows += f"<tr><td style='font-family:monospace;font-size:12px;'>{u.get('invoice','-')}</td><td>{u['nama']}</td><td style='font-size:12px;'>{u['email']}</td><td>{u.get('whatsapp','-')}</td><td><b>Rp {u.get('harga_display', u.get('price','-'))}</b></td><td style='font-size:11px;'>{u.get('fase_nama','-')}</td><td><span style='background:{status_color};color:white;padding:4px 10px;border-radius:10px;font-size:11px;'>{u.get('status','-')}</span></td><td>{u.get('registered_at','-')[:10]}</td></tr>"
     if not rows:
-        rows = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">Belum ada user</td></tr>'
+        rows = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#999;">Belum ada user</td></tr>'
+    
+    # Bangun tabel fase
+    fase_rows = ''
+    for i, fase in enumerate(FASE_HARGA):
+        user_di_fase = 0
+        if i < len(FASE_HARGA) - 1:
+            user_di_fase = sum(1 for u in users if u.get('fase_number') == i + 1)
+            range_text = f"{i * KUOTA_PER_FASE} - {(i+1) * KUOTA_PER_FASE - 1}"
+        else:
+            user_di_fase = sum(1 for u in users if u.get('fase_number') == i + 1)
+            range_text = f"{i * KUOTA_PER_FASE}+"
+        
+        is_active = (harga_data['fase_index'] == i)
+        bg_color = '#fef3c7' if is_active else 'white'
+        bold = 'font-weight:bold;' if is_active else ''
+        
+        fase_rows += f"<tr style='background:{bg_color};'><td style='padding:10px;{bold}'>{fase['nama']}</td><td style='padding:10px;text-align:center;'>{range_text}</td><td style='padding:10px;text-align:right;{bold}'>Rp {fase['harga']:,}</td><td style='padding:10px;text-align:center;'>{user_di_fase} user</td></tr>".replace(',', '.')
+    
     return f"""
     <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin Panel</title>
     <style>
         body {{ font-family:Arial;background:#f3f4f6;padding:20px;margin:0; }}
-        .card {{ background:white;border-radius:20px;padding:30px;max-width:1100px;margin:auto;box-shadow:0 4px 12px rgba(0,0,0,0.05); }}
+        .card {{ background:white;border-radius:20px;padding:30px;max-width:1200px;margin:auto;box-shadow:0 4px 12px rgba(0,0,0,0.05); }}
         h2 {{ color:#1f2937;margin-top:0; }}
+        h3 {{ color:#374151;margin-top:24px;border-bottom:2px solid #e5e7eb;padding-bottom:8px; }}
         table {{ width:100%;border-collapse:collapse;margin-top:16px;font-size:13px; }}
         th {{ background:#16a34a;color:white;padding:12px;text-align:left; }}
         td {{ padding:10px;border-bottom:1px solid #eee; }}
         a.logout {{ color:#dc2626;text-decoration:none;float:right;font-size:14px; }}
-        .stat {{ display:inline-block;background:#f0fdf4;border-radius:12px;padding:12px 20px;margin-right:10px;margin-bottom:10px; }}
-        .stat b {{ color:#16a34a;font-size:24px;display:block; }}
-        .promo-info {{ background:#fef3c7;border-radius:12px;padding:16px;margin:16px 0;border-left:4px solid #f59e0b; }}
-        .wa-off {{ background:#fee2e2;border-radius:12px;padding:12px 16px;margin:12px 0;border-left:4px solid #dc2626;font-size:13px;color:#991b1b; }}
+        .stat {{ display:inline-block;background:#f0fdf4;border-radius:12px;padding:14px 22px;margin-right:10px;margin-bottom:10px;text-align:center; }}
+        .stat b {{ color:#16a34a;font-size:26px;display:block; }}
+        .stat span {{ font-size:12px;color:#666; }}
+        .info-box {{ background:#eff6ff;border-radius:12px;padding:16px;margin:16px 0;border-left:4px solid #3b82f6;font-size:13px;color:#1e40af; }}
     </style></head><body>
     <div class="card">
         <a class="logout" href="/admin-logout">🚪 Logout</a>
         <h2>⚙️ Admin Panel</h2>
         
-        <div class="promo-info">
-            <p style="margin:0;font-weight:bold;">🎯 Status Promo: <span style="color:{status_promo_color};">{status_promo_text}</span></p>
-            <p style="margin:8px 0 0;font-size:13px;">Waktu mulai: <b>{WAKTU_MULAI_PROMO}</b> (UTC)</p>
-            <p style="margin:4px 0 0;font-size:13px;">Durasi: <b>{DURASI_PROMO_MENIT} menit</b> · Sisa: <b>{sisa_detik} detik</b></p>
-        </div>
-        
-        <div class="wa-off">
-            ⏸️ <b>WA dimatikan sementara</b> — belum ada saldo Fonnte. Notifikasi saat ini via <b>Email</b> saja.
+        <div class="info-box">
+            🎯 <b>Sistem Harga Bertahap Aktif</b><br>
+            Setiap <b>{KUOTA_PER_FASE} member</b>, harga naik 1 tingkat. Total: <b>{len(users)} member</b>.
         </div>
         
         <div>
-            <div class="stat">👥 Total User<b>{len(users)}</b></div>
-            <div class="stat">⏳ Menunggu Bayar<b>{sum(1 for u in users if u.get('status')=='pending_payment')}</b></div>
-            <div class="stat">🔥 Beli Promo<b>{sum(1 for u in users if u.get('is_promo'))}</b></div>
+            <div class="stat"><b>{len(users)}</b><span>👥 Total Member</span></div>
+            <div class="stat"><b>Rp {harga_data['harga_display']}</b><span>💰 Harga Sekarang</span></div>
+            <div class="stat"><b>{harga_data['fase_nama']}</b><span>🏷️ Fase Aktif</span></div>
+            <div class="stat"><b>{harga_data['sisa_slot']}</b><span>⏳ Slot Sampai Naik</span></div>
         </div>
+        
+        <h3>📊 Tabel Fase Harga</h3>
         <table>
-            <tr><th>Invoice</th><th>Nama</th><th>Email</th><th>WA</th><th>Total</th><th>Status</th><th>Tanggal</th></tr>
+            <tr><th>Fase</th><th style="text-align:center;">Rentang Member</th><th style="text-align:right;">Harga</th><th style="text-align:center;">Jumlah User</th></tr>
+            {fase_rows}
+        </table>
+        
+        <h3>👥 Daftar Member ({len(users)})</h3>
+        <table>
+            <tr><th>Invoice</th><th>Nama</th><th>Email</th><th>WA</th><th>Bayar</th><th>Fase</th><th>Status</th><th>Tanggal</th></tr>
             {rows}
         </table>
     </div></body></html>
@@ -427,8 +499,7 @@ def test_email():
                 <h2 style="margin:0;">✅ EMAIL BERFUNGSI!</h2>
             </div>
             <div style="padding:30px;">
-                <p>Kalau Anda menerima email ini, artinya <b>Gmail App Password sudah benar</b> dan server bisa kirim email.</p>
-                <p>Sekarang customer akan otomatis dapat invoice via email setiap kali daftar.</p>
+                <p>Kalau Anda menerima email ini, artinya <b>Gmail App Password sudah benar</b>.</p>
             </div>
         </div>
         """
@@ -440,7 +511,13 @@ def test_email():
 
 @app.route('/test-wa')
 def test_wa():
-    return "⏸️ WA dinonaktifkan sementara. Belum ada saldo Fonnte. Untuk saat ini pakai Email saja."
+    return "⏸️ WA dinonaktifkan sementara. Belum ada saldo Fonnte."
+
+@app.route('/api/reset-users')
+def api_reset_users():
+    """⚠️ HATI-HATI: Hapus semua user (buat testing)"""
+    save_json(USERS_FILE, [])
+    return "✅ Semua user dihapus. Sekarang di Fase 1 (Rp 99.000). <a href='/admin'>Kembali ke Admin</a>"
 
 if __name__ == '__main__':
     app.run(debug=True)
