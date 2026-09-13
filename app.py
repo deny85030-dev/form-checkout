@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, redirect, session, jsonify, send_from_directory
+from flask import Flask, request, render_template_string, redirect, session, jsonify
 from datetime import datetime
 import os, json, requests, smtplib
 from email.mime.multipart import MIMEMultipart
@@ -26,7 +26,7 @@ products = {
 
 QRIS_IMAGE_URL = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjdEuaeTQp9-oYTbkTybyGb4hV23Gbdi12E9p9x3SJNlzJCfweazzWg2Tr6iSXHFXlSxi845dqwVbRZQ8CPnI63_mtQ9wNltEb_gDtJtP5GiI_YeIZLWnBVw_AZ1Glo_0RfuHBupJFra28Gf1M3idWT6l9G_edl1DNSjZ5P9DLhT5CFzwCIkG7pWGHLYSk/w398-h400/photo_2026-05-14_06-29-01.jpg"
 
-# ========================== STORAGE (pakai /tmp untuk Vercel) ===
+# ========================== STORAGE ====================
 USERS_FILE = '/tmp/users.json'
 ORDERS_FILE = '/tmp/orders.json'
 
@@ -43,7 +43,7 @@ def save_json(path, data):
     except Exception as e:
         print(f"Save error: {e}")
 
-# ========================== WHATSAPP (FONNTE) ====================
+# ========================== WHATSAPP ====================
 def send_whatsapp(phone, message):
     try:
         phone = ''.join(filter(str.isdigit, phone))
@@ -86,14 +86,213 @@ def login_required(f):
         return f(*args, **kwargs)
     return wrapper
 
+# ========================== HALAMAN UTAMA (LOGIN + DAFTAR) ========
+HOME_TEMPLATE = '''
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akses Member Area</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Plus Jakarta Sans',sans-serif; background:#f0f4f0; padding:20px; min-height:100vh; }
+.app { max-width:480px; margin:40px auto; }
+.card { background:white; border-radius:24px; padding:32px; box-shadow:0 4px 12px rgba(6,40,15,0.06); }
+.member-header { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+.lock-badge { background:linear-gradient(135deg,#052e16,#16a34a); color:white; width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:20px; }
+.member-header h3 { font-size:20px; font-weight:800; }
+.subtitle { color:#3d523d; margin-bottom:24px; font-size:14px; }
+.auth-tabs { display:flex; margin-bottom:24px; border-radius:14px; border:2px solid #dbe7db; background:#f8faf8; padding:5px; gap:5px; }
+.auth-tab { flex:1; padding:13px; font-weight:800; cursor:pointer; background:transparent; color:#7a8f7a; border:none; border-radius:10px; font-family:inherit; font-size:14px; transition:0.2s; }
+.auth-tab.active { background:linear-gradient(135deg,#052e16,#16a34a); color:white; }
+.auth-form { display:none; }
+.auth-form.active { display:block; }
+.input-group { margin-bottom:18px; }
+.input-group label { display:block; font-weight:800; font-size:13px; margin-bottom:8px; color:#0a1a0f; }
+.input-group input { width:100%; padding:14px 18px; border:2px solid #dbe7db; border-radius:12px; font-size:15px; font-family:inherit; background:#f8faf8; transition:0.2s; }
+.input-group input:focus { outline:none; border-color:#16a34a; background:white; }
+.btn-login, .btn-register { width:100%; padding:16px; border-radius:14px; font-weight:800; font-size:15px; cursor:pointer; border:none; color:white; font-family:inherit; transition:0.2s; }
+.btn-login { background:linear-gradient(135deg,#052e16,#16a34a); }
+.btn-register { background:linear-gradient(135deg,#1e3a8a,#2563eb); }
+.btn-login:hover, .btn-register:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(6,40,15,0.15); }
+.btn-login:disabled, .btn-register:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+.auth-error { color:#dc2626; text-align:center; margin-top:14px; font-weight:700; font-size:13px; display:none; padding:14px; background:#fef2f2; border-radius:12px; border:1.5px solid #fca5a5; }
+.auth-error.show { display:block; }
+.auth-success { color:#15803d; text-align:center; margin-top:14px; font-weight:700; font-size:13px; display:none; padding:14px; background:#ecfdf3; border-radius:12px; border:1.5px solid #a7f3c4; }
+.auth-success.show { display:block; }
+.footer { text-align:center; font-size:12px; color:#7a8f7a; padding:24px; }
+.admin-link { display:block; text-align:center; margin-top:16px; font-size:12px; color:#9ca3af; text-decoration:none; }
+.admin-link:hover { color:#16a34a; }
+</style>
+</head>
+<body>
+<div class="app">
+    <div class="card">
+        <div class="member-header">
+            <div class="lock-badge">🔐</div>
+            <h3>Akses Member Area</h3>
+        </div>
+        <p class="subtitle">Login atau daftar untuk mengakses semua modul.</p>
+
+        <div class="auth-tabs">
+            <button class="auth-tab active" data-tab="login">Login</button>
+            <button class="auth-tab" data-tab="register">Daftar</button>
+        </div>
+
+        <div class="auth-form active" id="formLogin">
+            <div class="input-group">
+                <label>Email</label>
+                <input type="email" id="loginEmail" placeholder="email@example.com">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="loginPass" placeholder="Masukkan password">
+            </div>
+            <button id="btnLoginMember" class="btn-login">Masuk ke Kelas</button>
+            <div id="loginError" class="auth-error"></div>
+        </div>
+
+        <div class="auth-form" id="formRegister">
+            <div class="input-group">
+                <label>Nama Lengkap</label>
+                <input type="text" id="regName" placeholder="Contoh: Andi Perkasa">
+            </div>
+            <div class="input-group">
+                <label>Email</label>
+                <input type="email" id="regEmail" placeholder="email@example.com">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="regPass" placeholder="Minimal 6 karakter">
+            </div>
+            <div class="input-group">
+                <label>Konfirmasi Password</label>
+                <input type="password" id="regConfirm" placeholder="Ulangi password">
+            </div>
+            <button id="btnRegisterMember" class="btn-register">Daftar Sekarang</button>
+            <div id="registerError" class="auth-error"></div>
+            <div id="registerSuccess" class="auth-success"></div>
+        </div>
+
+        <a href="/admin-login" class="admin-link">🔧 Admin Login</a>
+    </div>
+    <div class="footer">© 2026 {{ store }}</div>
+</div>
+
+<script>
+const tabs = document.querySelectorAll('.auth-tab');
+const formLogin = document.getElementById('formLogin');
+const formRegister = document.getElementById('formRegister');
+tabs.forEach(tab => {
+    tab.addEventListener('click', function() {
+        tabs.forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        const target = this.dataset.tab;
+        formLogin.classList.toggle('active', target === 'login');
+        formRegister.classList.toggle('active', target === 'register');
+    });
+});
+
+document.getElementById('btnLoginMember').addEventListener('click', function() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const pass = document.getElementById('loginPass').value.trim();
+    const errBox = document.getElementById('loginError');
+    errBox.classList.remove('show');
+    if (!email || !pass) {
+        errBox.textContent = 'Email dan password harus diisi.';
+        errBox.classList.add('show');
+        return;
+    }
+    const btn = this;
+    btn.textContent = 'Memproses...';
+    btn.disabled = true;
+    fetch('/api/login', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({email:email, password:pass})
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.textContent = 'Masuk ke Kelas';
+        btn.disabled = false;
+        if (data.success) {
+            window.location.href = data.redirect;
+        } else {
+            errBox.textContent = data.message;
+            errBox.classList.add('show');
+        }
+    })
+    .catch(err => {
+        btn.textContent = 'Masuk ke Kelas';
+        btn.disabled = false;
+        errBox.textContent = 'Server error: ' + err.message;
+        errBox.classList.add('show');
+    });
+});
+
+document.getElementById('btnRegisterMember').addEventListener('click', function() {
+    const nama = document.getElementById('regName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const pass = document.getElementById('regPass').value;
+    const confirm = document.getElementById('regConfirm').value;
+    const errBox = document.getElementById('registerError');
+    const okBox = document.getElementById('registerSuccess');
+    errBox.classList.remove('show');
+    okBox.classList.remove('show');
+
+    if (!nama || nama.length < 3) { errBox.textContent='Nama minimal 3 karakter.'; errBox.classList.add('show'); return; }
+    if (!email || !email.includes('@')) { errBox.textContent='Email tidak valid.'; errBox.classList.add('show'); return; }
+    if (pass.length < 6) { errBox.textContent='Password minimal 6 karakter.'; errBox.classList.add('show'); return; }
+    if (pass !== confirm) { errBox.textContent='Password tidak cocok.'; errBox.classList.add('show'); return; }
+
+    const btn = this;
+    btn.textContent = 'Mendaftar...';
+    btn.disabled = true;
+    fetch('/api/register', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({nama:nama, email:email, password:pass})
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.textContent = 'Daftar Sekarang';
+        btn.disabled = false;
+        if (data.success) {
+            okBox.textContent = '✅ ' + data.message;
+            okBox.classList.add('show');
+            document.getElementById('regName').value = '';
+            document.getElementById('regEmail').value = '';
+            document.getElementById('regPass').value = '';
+            document.getElementById('regConfirm').value = '';
+            setTimeout(() => {
+                document.querySelector('.auth-tab[data-tab="login"]').click();
+                document.getElementById('loginEmail').value = email;
+            }, 2000);
+        } else {
+            errBox.textContent = data.message;
+            errBox.classList.add('show');
+        }
+    })
+    .catch(err => {
+        btn.textContent = 'Daftar Sekarang';
+        btn.disabled = false;
+        errBox.textContent = 'Server error: ' + err.message;
+        errBox.classList.add('show');
+    });
+});
+</script>
+</body>
+</html>
+'''
+
 # ========================== ROUTE: HALAMAN UTAMA ====================
 @app.route('/')
 def home():
-    if os.path.exists('index.html'):
-        return send_from_directory('.', 'index.html')
-    return "Server aktif. Buka /admin-login"
+    return render_template_string(HOME_TEMPLATE, store=STORE_NAME)
 
-# ========================== ROUTE: REGISTER ====================
+# ========================== ROUTE: REGISTER API ====================
 @app.route('/api/register', methods=['POST', 'OPTIONS'])
 def api_register():
     if request.method == 'OPTIONS':
@@ -122,7 +321,6 @@ def api_register():
         users.append(new_user)
         save_json(USERS_FILE, users)
 
-        # Notif WA ke admin
         admin_msg = (
             f"🎉 *PENDAFTARAN BARU!*\n\n"
             f"👤 Nama: {nama}\n"
@@ -132,7 +330,6 @@ def api_register():
         )
         send_whatsapp(WHATSAPP_ADMIN, admin_msg)
 
-        # Email welcome
         welcome_html = f"""
         <div style="font-family:Arial;max-width:500px;margin:auto;background:white;border-radius:16px;overflow:hidden;">
             <div style="background:#16a34a;padding:30px;text-align:center;color:white;">
@@ -154,7 +351,7 @@ def api_register():
         print(f"Register error: {e}")
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
 
-# ========================== ROUTE: LOGIN ====================
+# ========================== ROUTE: LOGIN API ====================
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def api_login():
     if request.method == 'OPTIONS':
@@ -230,54 +427,11 @@ def admin():
     </div></body></html>
     """
 
-# ========================== ROUTE: TEST WA ====================
+# ========================== TEST WA ====================
 @app.route('/test-wa')
 def test_wa():
     result = send_whatsapp(WHATSAPP_ADMIN, "🧪 Test: WA dari Vercel OK!")
     return f"{'✅ WA OK' if result else '❌ WA GAGAL - Cek log Vercel'}"
-
-# ========================== ROUTE: CHECKOUT (opsional) ==========
-@app.route('/checkout')
-def checkout():
-    return render_template_string('''
-    <!DOCTYPE html><html><head><title>Checkout</title>
-    <style>body{font-family:Arial;background:#764ba2;padding:40px 20px;min-height:100vh;}
-    .card{background:white;border-radius:20px;padding:32px;max-width:500px;margin:auto;}
-    input{width:100%;padding:14px;margin:8px 0;border:1px solid #ddd;border-radius:12px;box-sizing:border-box;}
-    button{width:100%;padding:16px;background:#764ba2;color:white;border:none;border-radius:60px;font-weight:bold;cursor:pointer;margin-top:12px;}
-    </style></head><body>
-    <div class="card">
-    <h2>🛒 Checkout</h2>
-    <p style="color:#666;">Produk: ''' + products['name'] + ''' - Rp ''' + f"{products['price']:,}" + '''</p>
-    <form method="POST" action="/process-checkout">
-    <input type="text" name="customer" placeholder="Nama Lengkap" required>
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="tel" name="whatsapp" placeholder="No WhatsApp" required>
-    <button type="submit">✅ Konfirmasi Pesanan</button>
-    </form></div></body></html>
-    ''')
-
-@app.route('/process-checkout', methods=['POST'])
-def process_checkout():
-    customer = request.form['customer']
-    email = request.form['email']
-    whatsapp = request.form['whatsapp']
-    whatsapp_clean = ''.join(filter(str.isdigit, whatsapp))
-    if whatsapp_clean.startswith('0'): whatsapp_clean = '62' + whatsapp_clean[1:]
-    if not whatsapp_clean.startswith('62'): whatsapp_clean = '62' + whatsapp_clean
-    invoice_number = f"INV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    orders = load_json(ORDERS_FILE)
-    orders.insert(0, {
-        'invoice': invoice_number, 'customer_name': customer,
-        'customer_email': email, 'customer_whatsapp': whatsapp_clean,
-        'product_name': products['name'], 'price': f"{products['price']:,}",
-        'status': 'pending', 'created_at': datetime.now().isoformat()
-    })
-    save_json(ORDERS_FILE, orders)
-    wa_msg = f"📋 INVOICE {invoice_number}\n\nHalo {customer},\n\nProduk: {products['name']}\nHarga: Rp {products['price']:,}\n\nBayar ke:\nBank Jago 106371536422\na.n. Deny Prasetyo"
-    send_whatsapp(whatsapp_clean, wa_msg)
-    send_whatsapp(WHATSAPP_ADMIN, f"🔔 PESANAN BARU!\n\n👤 {customer}\n📱 {whatsapp_clean}\n📋 {invoice_number}\n💰 Rp {products['price']:,}")
-    return f"<h2>✅ Pesanan berhasil! Invoice: {invoice_number}</h2><a href='/'>Kembali</a>"
 
 if __name__ == '__main__':
     app.run(debug=True)
