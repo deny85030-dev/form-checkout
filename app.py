@@ -15,7 +15,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 STORE_NAME = 'Formula YouTube Monet'
 WHATSAPP_ADMIN = '6285138718594'
 EMAIL_SENDER = 'morahshop@gmail.com'
-EMAIL_PASSWORD = 'ewsv nupx pvem olmq'
+EMAIL_PASSWORD = 'isbf qvjp lmmz aevv'
 FONNTE_API_KEY = ''  # ⏸️ WA dimatikan sementara
 ADMIN_PASSWORD = 'admin123'
 
